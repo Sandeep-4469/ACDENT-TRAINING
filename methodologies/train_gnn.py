@@ -27,7 +27,7 @@ from shared_eval import (
 )
 
 # ── config ───────────────────────────────────────────────────────────────────
-YOLO_PATH    = "/data1/sandeep_projects/Dental/train_yolo/runs/yolo11m_medium/weights/best.pt"
+YOLO_PATH    = os.path.join(os.path.dirname(__file__), "yolo11m_best.pt")
 BATCH_SIZE   = 4
 EPOCHS       = 120
 LR           = 1e-4
