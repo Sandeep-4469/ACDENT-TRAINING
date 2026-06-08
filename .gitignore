@@ -1,0 +1,29 @@
+# Dataset — patient images and annotations (never commit)
+dataset/
+
+# Trained model weights
+results/
+**/*.pth
+**/*.pt
+
+# Optuna experiment databases
+**/*.db
+
+# Logs
+methodologies/logs/
+**/*.log
+
+# YOLO derived dataset
+methodologies/yolo_dataset/
+
+# Result outputs (charts, CSVs, prediction images)
+methodologies/results/
+
+# Python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store

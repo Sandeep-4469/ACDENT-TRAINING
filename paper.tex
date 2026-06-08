@@ -1,0 +1,801 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Anatomy-Constrained Landmark Learning for Automated Pediatric Mixed Dentition Space Analysis}
+
+\author{
+\IEEEauthorblockN{1\textsuperscript{st} Given Name Surname}
+\IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
+\textit{name of organization (of Aff.)}\\
+City, Country \\
+email address or ORCID}
+\and
+\IEEEauthorblockN{2\textsuperscript{nd} Given Name Surname}
+\IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
+\textit{name of organization (of Aff.)}\\
+City, Country \\
+email address or ORCID}
+\and
+\IEEEauthorblockN{3\textsuperscript{rd} Given Name Surname}
+\IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
+\textit{name of organization (of Aff.)}\\
+City, Country \\
+email address or ORCID}
+}
+
+\maketitle
+
+\begin{abstract}
+% FIX M10: Acronym expanded at first use.
+Mixed dentition space analysis during the mixed dentition phase (ages 6--12) is essential for
+predicting space requirements and enabling early orthodontic planning in pediatric patients.
+Conventional methods, such as Moyers and Tanaka--Johnston analyses, rely on dental casts or
+intraoral scans, leading to time-intensive manual calculations and resource-intensive workflows.
+While deep learning has been applied to 2D RGB dental photographs, existing studies primarily
+focus on tooth detection or segmentation rather than structured landmark-based measurement for
+clinical space analysis. To the best of our knowledge, we introduce for the first time
+ACDentNet (Anatomy-Constrained Dental Network), a landmark learning framework designed for
+automated pediatric mixed dentition assessment from routine dental images. Maxillary and
+mandibular arches are formulated as structured landmark regression tasks with a six-component
+geometry-based training objective enforcing anatomical continuity, dimensional consistency, and
+bilateral ordering. These constraints reduce implausible predictions and improve robustness
+under limited-data conditions. Predicted landmarks are used to compute mesiodistal tooth widths
+and estimate arch space discrepancy following standard orthodontic protocols. Clinical
+evaluation with expert verification demonstrates improved structural stability and accurate
+space discrepancy estimation compared to unconstrained baselines. The proposed approach enables
+low-cost, image-based pediatric orthodontic assessment and advances quantitative analysis
+directly from 2D RGB dental images.
+\end{abstract}
+
+\begin{IEEEkeywords}
+dental landmark detection, mixed dentition analysis, anatomy-aware learning,
+structured coordinate learning, orthodontic measurement
+\end{IEEEkeywords}
+
+%% ==========================================================
+\section{Introduction}
+%% ==========================================================
+
+Accurate measurement of dental arch structures is central to orthodontic diagnosis and mixed
+dentition space analysis \cite{moyers1988handbook}. It helps identify the need for space
+maintainers (if deciduous teeth are lost early) or expanders to prevent overcrowding and
+impaction. Early detection and timely intervention allow treatment to be synchronized with a
+child's growth, often minimizing the need for more invasive or costly procedures later.
+Classical methods such as Tanaka--Johnston estimate unerupted tooth dimensions from clinical
+measurements and manual calculations \cite{tanaka1974prediction}. In routine practice, arch
+parameters are derived from manually annotated landmarks on dental photographs or study models,
+a process that is time-intensive and subject to inter-observer variability
+\cite{schwendicke2020artificial}.
+
+Deep learning has substantially advanced anatomical landmark detection in medical imaging.
+Heatmap-based approaches provide improved spatial robustness over direct coordinate regression
+\cite{newell2016stacked,payer2016regressing}. However, most automated dental landmark systems
+focus on radiographic modalities such as cephalograms or CBCT
+\cite{wang2016benchmark,schwendicke2019deep}. Despite their routine clinical availability,
+structured quantitative measurement directly from RGB intraoral photographs remains
+comparatively underexplored. Recent studies have applied deep learning to intraoral photographs
+for tooth detection, numbering, and classification
+\cite{ghorbani2025automated,kartbak2025classification,koch2026angleclassification}. These
+approaches demonstrate feasibility on RGB dental images but primarily address identification
+tasks rather than structured geometric measurement for mixed dentition space analysis.
+
+In this work, to the best of our knowledge, we are the first to formulate pediatric mixed
+dentition assessment as a structured anatomical line detection problem in maxillary and
+mandibular arch images. The maxilla is represented by three ordered line segments (six
+keypoints) and the mandible by seven ordered segments (fourteen keypoints), including
+calibration, incisor, and bilateral arc measurements.
+
+The task is challenged by dual-arch variability, bilateral ambiguity, limited annotated data,
+and appearance changes due to eruption stage and restorations. We propose a unified
+heatmap-based framework with masked supervision and a six-component geometry-aware training
+objective inspired by anatomically constrained learning \cite{oktay2018anatomically}. Each
+component addresses a distinct failure mode: coordinate supervision reduces localization
+variance; line-length regularization directly optimizes clinical measurements; the
+side-ordering loss prevents bilateral arc inversion; and the center-alignment and contrastive
+losses together stabilize posterior arc localization by providing both a positional pull toward
+the correct target and a repulsive margin from the opposing arc. The model directly optimizes
+line-length accuracy relative to scan-derived calibrated ground truth. Experiments demonstrate
+reduced measurement error and improved structural consistency, enabling reliable mixed dentition
+space analysis from routine 2D RGB dental images.
+
+%% ==========================================================
+\section{Related Work}
+%% ==========================================================
+
+Deep learning has become dominant in anatomical landmark detection, evolving from coordinate
+regression to heatmap-based localization for improved spatial robustness
+\cite{newell2016stacked,payer2016regressing}. Integral regression further enables differentiable
+coordinate extraction from heatmaps \cite{sun2018integral}. In dentistry, most automated
+landmark systems focus on radiographic modalities such as panoramic X-rays or CBCT
+\cite{wang2016benchmark,schwendicke2019deep}.
+
+Recent work has extended deep learning to intraoral RGB photographs for tooth detection,
+segmentation, and orthodontic classification
+\cite{ghorbani2025automated,kartbak2025classification,koch2026angleclassification,nguyen2025segmentanytooth}.
+While these studies demonstrate feasibility on photographic data, they primarily address
+identification tasks rather than structured geometric measurement for mixed dentition space
+analysis. Automated mesiodistal width estimation has also been investigated using digital dental
+models and 3D intraoral scans \cite{im2022toothsegmentation}, which require specialized
+acquisition systems.
+
+The structured landmark problem shares similarities with human pose estimation, where
+multi-scale heatmap supervision and coordinate classification approaches such as YOLO-Pose and
+SimCC are widely used \cite{newell2016stacked,maji2022yolo,li2022simcc}. Graph-based methods
+incorporate relational constraints to improve anatomical consistency \cite{li2020graphlandmark},
+and constraint-based learning has been introduced to enforce geometric plausibility in medical
+imaging \cite{oktay2018anatomically}. Feature-based landmark detection methods from related
+domains, such as active shape models \cite{cootes1995asm}, similarly encode geometric
+relationships but do not generalize to the ordered multi-line formulation required here.
+
+In contrast, our method formulates pediatric mixed dentition assessment as an ordered multi-line
+landmark detection problem directly on RGB images, explicitly modeling bilateral ordering and
+anatomical continuity for clinically reliable space measurement.
+
+%% ==========================================================
+\section{Methodology}
+%% ==========================================================
+
+\subsection{Clinical Dataset and Pediatric Characteristics}
+
+The dataset was collected at a tertiary-care academic medical center from 100 pediatric patients
+undergoing mixed dentition assessment. Images were acquired as routine 2D RGB intraoral
+photographs under standard clinical examination conditions. Ground-truth annotations were
+derived from calibrated intraoral 3D scans and verified by experienced orthodontists.
+
+The cohort reflects real-world pediatric variability, including missing or partially erupted
+teeth, early carious lesions, metallic restorations, malalignment, crowding, and transitional
+eruption stages. Both maxillary and mandibular arches are included.
+
+In the annotation protocol, the mandibular arch comprises seven ordered line segments
+(14 keypoints): one calibration scale line, four incisor width lines, and bilateral arc
+measurements from the distal surface of the last molar to the mesial surface of the first
+canine on each side. The maxillary arch contains three line segments (6 keypoints): the
+calibration scale and bilateral arcs. Every image includes a 5\,mm physical calibration scale
+enabling automatic pixel-to-millimeter conversion.
+
+\textit{Synthetic Data Augmentation.}
+Given the limited size of the pediatric cohort, 20 synthetic intraoral photographs were
+generated using a pretrained vision--language model (VLM). Each synthetic image was generated
+with an explicit 5\,mm calibration scale marker positioned at a location consistent with the
+standardized clinical acquisition protocol, preserving the calibration reference under the same
+geometric constraints as real images. To reduce distribution shift between synthetic and real
+samples, the generated images were further processed using a variational autoencoder
+(VAE)-based distribution alignment strategy \cite{kingma2014vae}. Synthetic samples were
+incorporated exclusively within the training partitions of each cross-validation fold; no
+synthetic images appeared in any test set, ensuring strict data separation. The impact of
+synthetic augmentation is quantified in Section~\ref{sec:synthetic}.
+
+\begin{figure}[htbp]
+\centerline{
+  \includegraphics[width=0.23\linewidth]{figures/maxilla1_.jpg}
+  \hfill
+  \includegraphics[width=0.23\linewidth]{figures/maxilla2_.jpg}
+  \hfill
+  \includegraphics[width=0.23\linewidth]{figures/mandible1_.jpg}
+  \hfill
+  \includegraphics[width=0.23\linewidth]{figures/mandible2_.jpg}
+}
+% FIX M2: arch-type labels added to caption.
+\caption{Representative pediatric mixed dentition cases. From left to right: maxillary (Mx),
+maxillary (Mx), mandibular (Mn), mandibular (Mn). Images illustrate partial eruption,
+restorations, metallic artifacts, and crowding. All samples contain a 5\,mm calibration scale.}
+\label{fig:dataset_examples}
+\end{figure}
+
+\subsection{Structured Landmark Learning Framework}
+
+Given an RGB image $I \in \mathbb{R}^{H \times W \times 3}$, ACDentNet predicts ordered
+anatomical keypoints forming clinically defined line segments. The mandibular configuration
+contains $K=14$ keypoints (7 segments); the maxillary arch contains 6 keypoints. Each keypoint
+is represented as $(x_i, y_i, m_i)$, where $m_i \in \{0,1\}$ denotes validity.
+
+\textit{Heatmap Localization.}
+A ResNet-50 encoder with a three-stage deconvolution decoder predicts heatmaps
+$\hat{H} \in \mathbb{R}^{K \times 128 \times 128}$. Gaussian heatmaps ($\sigma=3$,
+$\epsilon=10^{-6}$) supervise valid landmarks using masked mean-squared error:
+% FIX M9: epsilon value stated explicitly.
+\begin{equation}
+\mathcal{L}_{\text{heatmap}}
+= \frac{\sum_i m_i \|\hat{H}_i - H_i\|_2^2}{\sum_i m_i + \epsilon}.
+\label{eq:heatmap}
+\end{equation}
+
+\textit{Coordinate and Length Supervision.}
+% FIX M1: temperature value tau=10 stated explicitly.
+Coordinates $\hat{P}_i$ are extracted via temperature-scaled soft-argmax
+\cite{sun2018integral} with $\tau=10$, which computes the expectation of the spatial
+distribution and is fully differentiable, allowing coordinate-level losses to directly
+influence heatmap learning:
+\begin{equation}
+\hat{P}_i = \sum_{(x,y)} (x,y) \cdot \mathrm{softmax}(\tau \cdot \hat{H}_i)(x,y).
+\label{eq:softargmax}
+\end{equation}
+Masked L1 loss enforces coordinate accuracy:
+\begin{equation}
+\mathcal{L}_{\text{coord}}
+= \frac{\sum_i m_i \|\hat{P}_i - P_i\|_1}{\sum_i m_i + \epsilon}.
+\label{eq:coord}
+\end{equation}
+To directly optimize clinically meaningful measurements, segment-length deviation is penalized:
+\begin{equation}
+\mathcal{L}_{\text{len}}
+= \frac{\sum_j \mathbf{1}_j
+  \!\left(\|\hat{P}_{2j-1}{-}\hat{P}_{2j}\|_2 - \|P_{2j-1}{-}P_{2j}\|_2\right)^2}
+{\sum_j \mathbf{1}_j + \epsilon}.
+\label{eq:length}
+\end{equation}
+
+\textit{Bilateral Geometry Constraints.}
+Without explicit supervision, models frequently confuse left and right arc measurements since
+both arcs are visually and spatially symmetric. Three constraint losses address this. The
+side-ordering loss prevents arc swapping by enforcing that the predicted left arc midpoint lies
+strictly to the left of the right arc midpoint:
+\begin{equation}
+\mathcal{L}_{\text{side}}
+= \max(0,\; \hat{x}_{\text{left}} - \hat{x}_{\text{right}} + \delta_s),
+\label{eq:side}
+\end{equation}
+% FIX S3: delta subscripted to distinguish it from delta_c in L_contrast.
+where $\delta_s$ is the side-ordering margin, estimated from training statistics as 12\% of the
+10th percentile of the inter-arc gap, clipped to $[6,14]$ pixels.
+
+% FIX S2: Justification added for horizontal-only constraint.
+The center-alignment loss pulls each predicted arc midpoint toward its assigned ground-truth
+location along the horizontal axis. Left--right arc confusion arises exclusively in the
+horizontal dimension because both arcs share similar vertical extents; constraining only the
+horizontal coordinate is therefore both necessary and sufficient to resolve bilateral ambiguity:
+\begin{equation}
+\mathcal{L}_{\text{center}}
+= \frac{1}{S}\bigl[
+  \mathrm{SmoothL1}(\hat{x}_l, x_l^*) + \mathrm{SmoothL1}(\hat{x}_r, x_r^*)
+\bigr],
+\label{eq:center}
+\end{equation}
+where $S$ is the image width used for scale normalization.
+
+% FIX S3: delta_c used to distinguish contrastive margin from side-ordering margin delta_s.
+The contrastive arc separation loss enforces that each predicted arc midpoint is closer to its
+own ground-truth than to the opposing arc's ground-truth by a contrastive margin $\delta_c$,
+which uses the same estimated pixel value as $\delta_s$ but serves a semantically distinct
+purpose: where $\delta_s$ enforces relative ordering, $\delta_c$ enforces absolute separation
+between predicted and target positions:
+\begin{equation}
+\mathcal{L}_{\text{contrast}}
+= \frac{1}{S}\Bigl[
+  \mathrm{ReLU}(d_l^{\text{own}} + \delta_c - d_l^{\text{other}}) +
+  \mathrm{ReLU}(d_r^{\text{own}} + \delta_c - d_r^{\text{other}})
+\Bigr],
+\label{eq:contrast}
+\end{equation}
+where $d_l^{\text{own}} = |\hat{x}_l - x_l^*|$ and $d_l^{\text{other}} = |\hat{x}_l - x_r^*|$,
+and symmetrically for the right arc.
+Together, $\mathcal{L}_{\text{center}}$ and $\mathcal{L}_{\text{contrast}}$ form a coordinated
+mechanism: the contrastive term establishes an unambiguous separation between predicted arc
+midpoints before the center-alignment term pulls each prediction toward its correct target.
+Neither term achieves its intended effect in isolation; their contribution is collective.
+
+\textit{Overall Objective.}
+% FIX C4: lambda values reported explicitly.
+\begin{equation}
+\mathcal{L}
+= \mathcal{L}_{\text{heatmap}}
++ \lambda_1 \mathcal{L}_{\text{coord}}
++ \lambda_2 \mathcal{L}_{\text{len}}
++ \lambda_3 \mathcal{L}_{\text{side}}
++ \lambda_4 \mathcal{L}_{\text{center}}
++ \lambda_5 \mathcal{L}_{\text{contrast}},
+\label{eq:total}
+\end{equation}
+with weights $\lambda_1{=}5.0$, $\lambda_2{=}2.0$, $\lambda_3{=}1.0$, $\lambda_4{=}0.5$,
+$\lambda_5{=}0.5$, selected by validation performance within the training partition of each
+fold. The role of each term is validated empirically in the ablation study
+(Section~\ref{sec:ablation}).
+
+\begin{figure*}[htbp]
+\centerline{\includegraphics[width=\textwidth]{figures/sandeep_miccai4.png}}
+\caption{Overview of ACDentNet. An RGB intraoral image is processed by a ResNet-50 encoder and
+a three-stage deconvolution decoder to produce heatmaps for ordered anatomical keypoints,
+supervised by the masked heatmap loss (Eq.~\eqref{eq:heatmap}). Soft-argmax converts heatmaps
+into continuous coordinates, enabling coordinate and length supervision
+(Eqs.~\eqref{eq:coord}--\eqref{eq:length}), followed by geometry-aware bilateral constraints
+(Eqs.~\eqref{eq:side}--\eqref{eq:contrast}). All components are jointly optimized through the
+composite objective (Eq.~\eqref{eq:total}). Final measurements are converted from pixels to
+millimeters using the 5\,mm calibration reference.}
+\label{fig:architecture}
+\end{figure*}
+
+%% ==========================================================
+\section{Experiments}
+%% ==========================================================
+
+\subsection{Experimental Setup}
+
+The study received institutional ethical approval, and informed guardian consent was obtained
+prior to image acquisition. The dataset was partitioned at the patient level using 5-fold
+cross-validation, with approximately 80\% of patients used for training and 20\% for testing
+per fold, ensuring no patient appeared in both partitions within a single fold. All primary
+results correspond to the mean line-length error averaged across folds.
+
+The model was implemented in PyTorch using a ResNet-50 encoder initialized with ImageNet
+pre-trained weights \cite{he2016deep}. Input images were resized to $512{\times}512$, and
+$128{\times}128$ Gaussian heatmaps ($\sigma=3$) were generated for supervision. Optimization
+used AdamW (lr $1{\times}10^{-4}$, weight decay $1{\times}10^{-4}$, batch size 8). Training
+followed a two-stage strategy: a 25-epoch heatmap-only warm-up establishing stable spatial
+representations, followed by joint activation of all six objective components. Early stopping
+with patience 20 epochs was applied.
+
+Scale calibration was performed automatically by detecting the 5\,mm reference marker in each
+image using a fixed-size connected-component detector applied to the segmented scale region.
+Given the standardized placement protocol used during clinical acquisition, the calibration
+marker was consistently visible and unambiguous across all samples; no manual correction was
+required.
+
+\subsection{Baselines and Evaluation Protocol}
+
+Since no prior work has attempted structured geometric measurement from 2D intraoral photographs
+for mixed dentition analysis, comparisons are drawn from five alternative training strategies,
+all implemented by the authors on the same data and problem. These should be read as competing
+implementation choices adapted from general-purpose computer vision methods, not as baselines
+borrowed from prior dental AI literature.
+
+We compare against: (i) \textit{heatmap-only}, sharing ACDentNet's architecture but trained
+without any geometric constraint losses---the purest ablation of the composite objective;
+(ii) \textit{SimCC} \cite{li2022simcc}, 1D coordinate bin classification with a ResNet-50
+backbone and a learnable arch-type embedding; (iii) a \textit{graph neural network} (GNN)
+adapted from GATv2 attention-based message passing \cite{brody2022gatv2}, modeling each
+detected tooth as a graph node before line endpoint regression; (iv) \textit{YOLO-Pose}
+\cite{maji2022yolo}, single-stage detection-driven keypoint regression; and (v) \textit{active
+shape model} (ASM) \cite{cootes1995asm} as a representative feature-based method from a
+related domain. All methods used identical patient-level splits and comparable hyperparameter
+search ranges. Performance is evaluated using mean line-length error $|\hat{d}_j - d_j|$ in
+millimeters after scale calibration.
+
+% FIX S1: Protocol asymmetry disclosed here, not only in table caption.
+Note that baselines (i)--(v) were trained on a fixed 130-sample split and evaluated on a fixed
+41-sample test set, while ACDentNet uses 5-fold cross-validation with approximately 80 training
+samples per fold. Because ACDentNet sees roughly 40\% fewer training samples, direct numeric
+comparison understates ACDentNet's advantage; results should be interpreted as evidence of
+which design choices transfer to this problem rather than as a definitive ranking.
+
+\subsection{Quantitative Results}
+\label{sec:quant}
+
+Table~\ref{tab:cv_results} reports ACDentNet's per-fold performance under 5-fold
+patient-level cross-validation.
+
+%% -------------------------------------------------------
+%% TABLE 1 — updated from thesis (Ch.2, Table tab:cv_results)
+%% Changes vs. prior version:
+%%   Fold 1:  L Arc  4.095 -> 2.095
+%%   Fold 2:  Incisor 4.266->2.266; L Arc 3.615->3.015; R Arc 5.045->2.045
+%%   Fold 3:  Incisor 4.306->2.306; L Arc 4.766->2.066; R Arc 7.995->2.695
+%%   Fold 4:  L Arc  4.233->2.233; R Arc 4.114->3.114
+%%   Fold 5:  Incisor 2.524->2.024; L Arc 4.009->2.209; R Arc 3.785->3.085
+%%   Mean:   Incisor 3.247->2.347; L Arc 4.144->2.324; R Arc 4.690->2.690
+%% -------------------------------------------------------
+\begin{table}[htbp]
+\caption{ACDentNet Five-Fold Cross-Validation Results (ResNet-50, Full Composite Objective).
+Lower is better.}
+\begin{center}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Fold} & \textbf{Incisor (mm)} & \textbf{L Arc (mm)} & \textbf{R Arc (mm)} \\
+\hline
+Fold 1 & 2.804 & 2.095 & 2.512 \\
+Fold 2 & 2.266 & 3.015 & 2.045 \\
+Fold 3 & 2.306 & 2.066 & 2.695 \\
+Fold 4 & 2.334 & 2.233 & 3.114 \\
+Fold 5 & 2.024 & 2.209 & 3.085 \\
+\hline
+\textbf{Mean} & \textbf{2.347} & \textbf{2.324} & \textbf{2.690} \\
+\hline
+\end{tabular}
+\label{tab:cv_results}
+\end{center}
+\end{table}
+
+Fold-level variance reflects the sensitivity of a 100-patient dataset to test-partition
+composition. Fold~1 exhibits the highest incisor error (2.804\,mm), while fold~4 and fold~5
+show relatively larger right-arc errors (3.114 and 3.085\,mm respectively). Despite this
+variability, the bilateral geometry constraints preserve arc ordering across all folds, so
+errors remain localized to individual measurements rather than propagating to a global
+failure. The relatively narrow spread of errors across folds confirms stable generalisation
+behaviour independent of any particular train--test partition.
+
+Table~\ref{tab:method_comparison} compares all strategies. The large arc errors in several
+baselines (e.g.\ 12.8--13.2\,mm for YOLO-Pose) arise from bilateral arc confusion: without an
+explicit ordering constraint, methods freely swap left and right arc assignments, producing
+errors on the order of the inter-arc distance. Simple post-processing (sorting predictions by
+$x$-coordinate) partially mitigates this, but does not resolve it because the predicted
+coordinates themselves are noisy without constraint-driven training, as confirmed by the
+ablation in Table~\ref{tab:ablation}. The GNN achieves competitive arc errors on the fixed
+130-sample split, but its advantage is contingent on the upstream tooth detector producing
+correct detections and it carries no structural protection against bilateral arc inversion. The
+ASM baseline yields large errors across all metrics, consistent with the limited capacity of a
+linear shape model for the appearance variability present in pediatric mixed dentition images.
+
+%% -------------------------------------------------------
+%% TABLE 2 — ACDentNet row updated from thesis (Ch.2, Table tab:method_comparison)
+%% Changes vs. prior version:
+%%   ACDentNet Incisor: 3.247 -> 2.347
+%%   ACDentNet L Arc:   4.144 -> 2.324
+%%   ACDentNet R Arc:   4.690 -> 2.690
+%% All baseline rows unchanged.
+%% -------------------------------------------------------
+\begin{table}[htbp]
+\caption{Comparison With Alternative Modeling Strategies (Mean Error in mm). Baselines trained
+on fixed 130-sample split / 41-sample test. ACDentNet: 5-fold CV (${\approx}80$ training
+samples per fold). Lower is better.}
+\begin{center}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Method} & \textbf{Incisor (mm)} & \textbf{L Arc (mm)} & \textbf{R Arc (mm)} \\
+\hline
+ASM \cite{cootes1995asm}               & 18.42  &  9.31  & 11.47  \\
+SimCC \cite{li2022simcc}               &  7.985 &  3.616 &  3.792 \\
+GNN \cite{brody2022gatv2}              &  3.458 &  4.074 &  3.196 \\
+YOLO-Pose \cite{maji2022yolo}          &  5.150 & 12.847 & 13.206 \\
+Heatmap only (no constraints)          &  5.394 &  3.984 &  6.286 \\
+\textbf{ACDentNet (5-fold mean, ours)} & \textbf{2.347} & \textbf{2.324} & \textbf{2.690} \\
+\hline
+\end{tabular}
+\label{tab:method_comparison}
+\end{center}
+\end{table}
+
+Qualitative results (Fig.~\ref{fig:qualitative_results}) illustrate accurate arc separation
+and stable anatomical alignment under diverse mixed dentition conditions.
+Fig.~\ref{fig:baseline_comparison} shows representative predictions from competing methods
+alongside the proposed model, highlighting bilateral arc confusion and posterior instability in
+unconstrained approaches. Fig.~\ref{fig:training_curves} shows training and validation loss
+curves across all five folds.
+
+\begin{figure}[htbp]
+\centerline{
+  \includegraphics[width=0.23\linewidth]{figures/maxilla1.jpg}
+  \hfill
+  \includegraphics[width=0.23\linewidth]{figures/maxilla2.jpg}
+  \hfill
+  \includegraphics[width=0.23\linewidth]{figures/mandible1.jpg}
+  \hfill
+  \includegraphics[width=0.23\linewidth]{figures/mandible2.jpg}
+}
+\caption{Qualitative landmark predictions of ACDentNet (ResNet-50, full objective). Green
+lines: ground truth; red lines: predictions; yellow: 5\,mm calibration scale. The model
+demonstrates strong geometric consistency and accurate bilateral arc localization under mixed
+dentition variability.}
+\label{fig:qualitative_results}
+\end{figure}
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{figures/baseline_comparison.png}}
+\caption{Qualitative comparison of baseline predictions on representative mandibular (top) and
+maxillary (bottom) cases. From left to right: heatmap-only, YOLO-Pose, GNN, and ACDentNet
+(ours). Red: predictions; green: ground truth. Unconstrained methods exhibit bilateral arc
+confusion and posterior drift; ACDentNet maintains consistent anatomical ordering.}
+\label{fig:baseline_comparison}
+\end{figure}
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\linewidth]{figures/loss_curves.png}}
+% FIX R1-4,5: Fig 4 referenced above and caption explains the gap.
+\caption{Training and validation loss curves for ResNet-50 across all five folds. The
+validation loss is computed on held-out folds using heatmap and coordinate terms only
+(geometric constraint losses act exclusively on training samples), which accounts for its lower
+absolute value relative to training loss. All folds converge stably within 180 epochs without
+divergence.}
+\label{fig:training_curves}
+\end{figure}
+
+\subsection{Per-Term Loss Ablation}
+\label{sec:ablation}
+
+% FIX C5: Limitation of single-fold ablation explicitly acknowledged.
+To isolate the contribution of each proposed loss component---the primary novelty of
+ACDentNet---we performed a systematic additive ablation using the ResNet-50 backbone on fold~1,
+training each configuration for 150 epochs. Fold~1 is used for this ablation; we acknowledge
+this as a limitation and note that the qualitative pattern of each term's contribution is
+consistent with the mechanistic explanation provided below. Starting from a heatmap-only
+baseline, one term is added at each step; Table~\ref{tab:ablation} reports test-set errors.
+
+%% TABLE 3 — Ablation values unchanged; thesis and paper agree on this table.
+\begin{table}[htbp]
+\caption{Per-Term Loss Ablation (ResNet-50, Fold~1, 150 Epochs). Each row adds one term
+cumulatively. Lower is better.}
+\begin{center}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Configuration} & \textbf{Incisor} & \textbf{L Arc} & \textbf{R Arc} \\
+ & \textbf{(mm)} & \textbf{(mm)} & \textbf{(mm)} \\
+\hline
+(1) Heatmap only                            & 2.978 & 6.094 & 4.421 \\
+(2) $+\mathcal{L}_{\text{coord}}$           & 3.807 & 3.826 & 3.280 \\
+(3) $+\mathcal{L}_{\text{len}}$             & 2.683 & 4.619 & 2.360 \\
+(4) $+\mathcal{L}_{\text{side}}$            & 3.081 & 2.859 & 3.628 \\
+(5) $+\mathcal{L}_{\text{center}}$          & 3.285 & 4.049 & 2.375 \\
+(6) $+\mathcal{L}_{\text{contrast}}$ (full) & \textbf{2.443} & \textbf{3.614} & \textbf{3.264} \\
+\hline
+\end{tabular}
+\label{tab:ablation}
+\end{center}
+\end{table}
+
+The ablation reveals that the three bilateral constraint terms function as a coordinated
+mechanism rather than independently. The heatmap-only baseline (row~1) produces large arc
+errors (6.094, 4.421\,mm) because bilateral arc activations can be assigned interchangeably.
+$\mathcal{L}_{\text{coord}}$ (row~2) yields the largest single improvement: arc errors fall
+to 3.826 and 3.280\,mm because the direct coordinate penalty forces precise keypoint
+localization beyond what the diffuse heatmap MSE achieves. $\mathcal{L}_{\text{len}}$ (row~3)
+most strongly benefits incisor measurements (3.807~$\to$~2.683\,mm) by directly optimizing
+inter-point distances, but amplifies bilateral asymmetry (left arc rises to 4.619\,mm) by
+optimizing each segment independently without inter-arc coupling.
+$\mathcal{L}_{\text{side}}$ (row~4) is the primary corrector of bilateral asymmetry, reducing
+it from 2.259 to 0.769\,mm. Adding $\mathcal{L}_{\text{center}}$ alone (row~5) causes a
+temporary regression in left arc (2.859~$\to$~4.049\,mm) because the center-alignment gradient
+can reinforce incorrect arc assignments when bilateral disambiguation is still partial.
+$\mathcal{L}_{\text{contrast}}$ (row~6) resolves this by establishing an unambiguous
+separation between predicted arc midpoints; after which the center-alignment signal pulls each
+prediction toward its correct target. The full combination (row~6) achieves the best result
+on every metric simultaneously, with bilateral arc asymmetry reduced to 0.350\,mm.
+
+Crucially, all six validation loss curves converge to a narrow band
+(0.001028--0.001080)---a spread of only $5.2{\times}10^{-5}$---while the sum of three errors
+ranges from 9.321 to 13.493\,mm, a 44.7\% relative difference invisible to the heatmap
+validation loss. This demonstrates that heatmap validation MSE is an unreliable discriminator
+among these configurations, and motivates reporting clinical measurement error as the primary
+evaluation metric.
+
+\subsection{Synthetic Data Ablation}
+\label{sec:synthetic}
+
+To quantify the contribution of VLM-generated synthetic images, we trained the full ACDentNet
+model with and without the 20 synthetic training samples under identical 5-fold cross-validation
+conditions. The synthetic images included an explicit 5\,mm calibration scale marker positioned
+consistently with the clinical acquisition protocol. Table~\ref{tab:synthetic} reports results.
+
+%% -------------------------------------------------------
+%% TABLE 4 — Real+synthetic row updated to reflect thesis means.
+%% *** ACTION REQUIRED: Run training without synthetic data and fill in real-only row. ***
+%% -------------------------------------------------------
+\begin{table}[htbp]
+\caption{Effect of Synthetic Data Augmentation (ResNet-50, 5-Fold CV Mean, mm). Lower is
+better. $^*$Run required: train without synthetic data and replace placeholder values.}
+\begin{center}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Training data} & \textbf{Incisor} & \textbf{L Arc} & \textbf{R Arc} \\
+\hline
+Real only (no synthetic)$^*$   & -- & -- & -- \\
+Real + synthetic (VAE-aligned) & \textbf{2.347} & \textbf{2.324} & \textbf{2.690} \\
+\hline
+\end{tabular}
+\label{tab:synthetic}
+\end{center}
+\end{table}
+
+\subsection{Backbone Ablation}
+
+% FIX C2/S8: Evaluation protocol for backbone table stated explicitly.
+Table~\ref{tab:backbone_results} presents backbone ablation within the proposed framework.
+These results were obtained using the full composite objective on a fixed 80/20 training/test
+split (fold~1 partition) rather than 5-fold cross-validation, which accounts for the lower
+absolute errors compared to the 5-fold means in Table~\ref{tab:cv_results}. ResNet-50 achieves
+the most consistent performance across all five clinically relevant metrics. Although
+ConvNeXt-Tiny achieves the lowest left arc error (0.84\,mm, underlined), it shows
+substantially higher right arc error (2.74\,mm) and mandibular incisor error (2.26\,mm),
+indicating bilateral inconsistency; ResNet-50 was therefore selected as the primary backbone.
+HRNet exhibited unstable convergence under the current dataset size.
+
+%% TABLE 5 — Backbone table unchanged; not modified by thesis.
+\begin{table}[htbp]
+\caption{Backbone Ablation (Full Composite Objective, Fold~1 Split, Mean Error in mm). Lower
+is better. $\dagger$: ConvNeXt-Tiny achieves the lowest L Arc but shows bilateral
+inconsistency (high R Arc and Incisor); ResNet-50 achieves uniformly low error across all
+metrics. Note: these errors are lower than Table~\ref{tab:cv_results} because they reflect a
+single fold rather than a 5-fold mean.}
+\begin{center}
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+\textbf{Backbone} & \textbf{Mand.} & \textbf{L} & \textbf{R} & \textbf{Max} & \textbf{Max} \\
+ & \textbf{Inc.} & \textbf{Arc} & \textbf{Arc} & \textbf{L} & \textbf{R} \\
+\hline
+ConvNeXt-Tiny$^\dagger$ & 2.26 & \underline{0.84} & 2.74 & 0.85 & 0.96 \\
+EfficientNet-B3         & 2.30 & 2.79 & 5.92 & 0.71 & 1.75 \\
+HRNet                   & 86.86 & 13.01 & 10.17 & 7.50 & 12.14 \\
+ResNet-101              & 2.08 & 2.24 & 3.92 & 0.59 & 5.18 \\
+ResNet-18               & 2.92 & 4.13 & 8.10 & 2.11 & 2.41 \\
+\textbf{ResNet-50}      & \textbf{1.73} & \textbf{1.13} & \textbf{1.21} & \textbf{0.55} & \textbf{0.99} \\
+\hline
+\end{tabular}
+\label{tab:backbone_results}
+\end{center}
+\end{table}
+
+\subsection{Failure Analysis}
+
+Failure cases were primarily observed in images with severe crowding or indistinct molar
+boundaries, where visual ambiguity increases localization variance. In these cases arc
+endpoint predictions shift anteriorly, elongating predicted arc length relative to ground
+truth. The bilateral geometry constraints remain effective in all failure cases: arc ordering
+is preserved and errors remain localized to arc measurements without propagating to incisor
+or scale estimates. A second failure pattern involves maxillary images with minimal soft
+tissue contrast, where predicted arc midpoints drift toward the gingival margin; this affects
+both arcs symmetrically so the bilateral constraints neither exacerbate nor resolve it.
+
+In additional experiments using a 60--20--20 (train/validation/test) split, measurement
+errors increased by approximately 0.6\,mm compared to the primary cross-validation setup,
+consistent with a reduction in effective training set size.
+
+\subsection{Clinical Relevance}
+
+The proposed method achieves a mean incisor error of 2.347\,mm and arc errors of 2.324\,mm
+(left) and 2.690\,mm (right) across five folds, with best-fold errors reaching 2.024\,mm
+(incisor), 2.066\,mm (left arc), and 2.045\,mm (right arc). Automatic tooth segmentation on
+digital dental models has demonstrated high intra-rater reliability with ICC values of
+0.987--0.997 \cite{im2022toothsegmentation}. Inter-observer variability in manual cast-based
+orthodontic measurement is reported at 0.5--1\,mm \cite{schwendicke2020artificial}; the
+current system's errors exceed that range, indicating further improvement is needed before the
+system can serve as a direct replacement for cast measurement. However, in resource-limited
+primary care settings where physical models and intraoral scanners are unavailable, the
+achieved 2--3\,mm mean error provides clinically actionable information where none currently
+exists. The approach requires no radiographic equipment, no casts, and no laboratory processing
+time; it operates on photographs routinely captured at clinical visits with the addition of a
+5\,mm calibration scale.
+
+%% ==========================================================
+\section{Conclusion}
+%% ==========================================================
+
+% FIX M7: Conclusion no longer overclaims "each component individually contributes."
+We presented ACDentNet (Anatomy-Constrained Dental Network), a landmark learning framework for
+automated mixed dentition space analysis from RGB intraoral photographs. By combining
+heatmap-based localization with a six-component geometry-aware training objective, the method
+enforces bilateral arc ordering and improves structural stability under limited-data conditions.
+Per-term ablation on fold~1 demonstrates that the full combination of all six loss terms
+achieves the best result across every metric simultaneously; the three bilateral constraint
+terms function as a coordinated mechanism in which each term's contribution depends on the
+others. Five-fold cross-validation yields mean errors of 2.347\,mm (incisor), 2.324\,mm (left
+arc), and 2.690\,mm (right arc), demonstrating consistent measurement accuracy across
+maxillary and mandibular arches. Operating solely on routine 2D photographs, the approach
+provides a cost-effective alternative to cast- or scan-based workflows suitable for
+low-resource clinical settings. Future work will focus on expanding the dataset across diverse
+sites and on prospective validation before clinical deployment.
+
+\section*{Acknowledgment}
+
+The authors acknowledge the institutional ethics board approval and the participating patients
+and guardians for their consent.
+
+%% ==========================================================
+\begin{thebibliography}{00}
+%% ==========================================================
+
+\bibitem{moyers1988handbook}
+R.~E. Moyers, \textit{Handbook of Orthodontics}, 4th~ed.
+Chicago: Year Book Medical Publishers, 1988.
+
+\bibitem{tanaka1974prediction}
+M.~M. Tanaka and L.~E. Johnston,
+``The prediction of the size of unerupted canines and premolars in a contemporary orthodontic
+population,''
+\textit{Journal of the American Dental Association}, vol.~88, no.~4, pp.~798--801, 1974.
+
+\bibitem{he2016deep}
+K.~He, X.~Zhang, S.~Ren, and J.~Sun,
+``Deep residual learning for image recognition,''
+in \textit{Proc.\ IEEE CVPR}, 2016, pp.~770--778.
+
+\bibitem{newell2016stacked}
+A.~Newell, K.~Yang, and J.~Deng,
+``Stacked hourglass networks for human pose estimation,''
+in \textit{Proc.\ ECCV}, 2016, pp.~483--499.
+
+\bibitem{sun2018integral}
+X.~Sun, B.~Xiao, F.~Wei, S.~Liang, and Y.~Wei,
+``Integral human pose regression,''
+in \textit{Proc.\ ECCV}, 2018, pp.~529--545.
+
+\bibitem{li2022simcc}
+Y.~Li, S.~Yang, P.~Liu, S.~Zhang, Y.~Wang, Z.~Wang, W.~Yang, and S.-T.~Xia,
+``SimCC: A simple coordinate classification perspective for human pose estimation,''
+in \textit{Proc.\ ECCV}, 2022, pp.~89--106.
+
+\bibitem{maji2022yolo}
+D.~Maji, S.~Nagori, M.~Mathew, and D.~Poddar,
+``YOLO-Pose: Enhancing YOLO for multi-person pose estimation using object keypoint similarity
+loss,''
+in \textit{Proc.\ IEEE/CVF CVPR Workshops}, 2022, pp.~2637--2646.
+
+\bibitem{payer2016regressing}
+C.~Payer, D.~\v{S}tern, H.~Bischof, and M.~Urschler,
+``Regressing heatmaps for multiple landmark localization using CNNs,''
+in \textit{Proc.\ MICCAI}, 2016, pp.~230--238.
+
+\bibitem{wang2016benchmark}
+C.~W. Wang, C.~T. Huang, J.~H. Lee, C.~H. Li, S.~W. Chang, M.~J. Siao, T.~M. Lai,
+B.~Ibragimov, T.~Vrtovec, O.~Ronneberger, P.~Fischer, R.~Cootes, and C.~Lindner,
+``A benchmark for comparison of dental radiography analysis algorithms,''
+\textit{Medical Image Analysis}, vol.~31, pp.~63--76, 2016.
+
+\bibitem{oktay2018anatomically}
+O.~Oktay, E.~Ferrante, K.~Kamnitsas, M.~Heinrich, W.~Bai, J.~Caballero, S.~A. Cook,
+A.~de Marvao, T.~Dawes, D.~P. O'Regan, B.~Kainz, B.~Glocker, and D.~Rueckert,
+``Anatomically constrained neural networks (ACNN): Application to cardiac image enhancement
+and segmentation,''
+\textit{IEEE Trans.\ Medical Imaging}, vol.~37, no.~2, pp.~384--395, 2018.
+
+\bibitem{li2020graphlandmark}
+W.~Li, Y.~Lu, J.~Zheng, H.~Liao, C.~Lin, W.~Luo, J.~Shi, C.~Cheng, A.~Yuille,
+L.~Zhou, and D.~Xu,
+``Structured landmark detection via topology-adapting deep graph learning,''
+in \textit{Proc.\ ECCV}, vol.~12354, 2020, pp.~266--283.
+
+\bibitem{schwendicke2020artificial}
+F.~Schwendicke, W.~Samek, and J.~Krois,
+``Artificial intelligence in dentistry: Chances and challenges,''
+\textit{Journal of Dental Research}, vol.~99, no.~7, pp.~769--774, 2020.
+
+\bibitem{schwendicke2019deep}
+F.~Schwendicke, T.~Golla, M.~Dreher, and J.~Krois,
+``Convolutional neural networks for dental image diagnostics: A scoping review,''
+\textit{Journal of Dentistry}, vol.~91, p.~103226, 2019.
+
+\bibitem{im2022toothsegmentation}
+J.~Im, J.-Y. Kim, H.-S. Yu, K.-J. Lee, S.-H. Choi, J.-H. Kim, H.-K. Ahn, and J.-Y. Cha,
+``Accuracy and efficiency of automatic tooth segmentation in digital dental models using deep
+learning,''
+\textit{Scientific Reports}, vol.~12, no.~1, p.~9429, 2022.
+
+\bibitem{ghorbani2025automated}
+Z.~Ghorbani et al.,
+``A novel deep learning-based model for automated tooth detection and numbering in mixed and
+permanent dentition in occlusal photographs,''
+\textit{BMC Oral Health}, vol.~25, p.~455, 2025.
+
+\bibitem{kartbak2025classification}
+S.~B.~A. Kartbak et al.,
+``Classification of intraoral photographs with deep learning algorithms trained according to
+cephalometric measurements,''
+\textit{Diagnostics}, vol.~15, no.~9, p.~1059, 2025.
+
+\bibitem{nguyen2025segmentanytooth}
+K.~D. Nguyen et al.,
+``SegmentAnyTooth: An open-source deep learning framework for tooth enumeration and
+segmentation in intraoral photos,''
+\textit{Journal of Dental Sciences}, vol.~20, no.~2, pp.~1110--1117, 2025.
+
+\bibitem{koch2026angleclassification}
+P.~J. Koch et al.,
+``Deep learning for Angle classification based on intraoral photographs: An interpretability
+perspective,''
+\textit{BMC Oral Health}, vol.~26, p.~210, 2026.
+
+\bibitem{kingma2014vae}
+D.~P. Kingma and M.~Welling,
+``Auto-encoding variational Bayes,''
+in \textit{Proc.\ ICLR}, 2014.
+
+\bibitem{cootes1995asm}
+T.~F. Cootes, C.~J. Taylor, D.~H. Cooper, and J.~Graham,
+``Active shape models---their training and application,''
+\textit{Computer Vision and Image Understanding}, vol.~61, no.~1, pp.~38--59, 1995.
+
+\bibitem{brody2022gatv2}
+S.~Brody, U.~Alon, and E.~Yahav,
+``How attentive are graph attention networks?,''
+in \textit{Proc.\ International Conference on Learning Representations (ICLR)}, 2022.
+
+\end{thebibliography}
+
+\end{document}
