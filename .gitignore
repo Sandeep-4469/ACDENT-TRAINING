@@ -1,5 +1,7 @@
 # Dataset — patient images and annotations (never commit)
 dataset/
+dataset_source/
+dataset_v2/
 
 # Trained model weights
 results/
